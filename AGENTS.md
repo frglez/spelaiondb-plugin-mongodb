@@ -1,48 +1,81 @@
-# A plugin of SpelaionDB — rules for agents
+# SpelaionDB's MongoDB plugin — rules for agents
 
-An engine for [SpelaionDB](https://github.com/spelaion-dev/spelaiondb): its driver, and a small
-program that serves it to SpelaionDB over its plugin protocol. Apache-2.0.
+MongoDB for [SpelaionDB](https://github.com/spelaion-dev/spelaiondb): the engine's driver, and
+a small program that serves it to SpelaionDB over its plugin protocol. It also serves the
+servers that speak MongoDB's protocol, each checked against a real one (FerretDB so far).
+Apache-2.0.
 
 **The rules of SpelaionDB's repository apply here** (its `AGENTS.md`: all the code is written
 by an agent, the compiler, the tests and CI are the only reviewer; everything in English;
 sign-off; one task, one short branch; commit subjects that read well in a changelog). This file
-says only what is different in a plugin's repository. A plugin's own `AGENTS.md` starts from
-this one and adds what is particular to its engine.
+says only what is different in this repository.
 
 ## What this is
-- `src/`: the driver. It implements `Driver` and `Connection` of `spelaion-driver-api`
-  (SpelaionDB's ADR-005): results in Arrow with `spelaion.logical` and `spelaion.native_type`
-  metadata per column.
-- `src/bin/spelaiondb-plugin-<engine>.rs`: the program. It hands the driver to
+- `src/lib.rs`: the driver. It implements `Driver` and `Connection` of `spelaion-driver-api`
+  (SpelaionDB's ADR-005) over MongoDB's own Rust driver. **It is sent requests, never
+  statements** (protocol 1.1, ADR-056 there): SpelaionDB's core reads what the user typed and
+  turns each statement into `{"database": "…", "command": {…}}`, a command document in
+  canonical Extended JSON. The driver checks that shape, runs the command exactly as it is,
+  and refuses statement text. `find`, `aggregate`, `listCollections` and `listIndexes` are read
+  as cursors, a batch at a time as the core gives credit; any other command's reply is one row,
+  and `insert`, `update` and `delete` report their `n` as the rows affected.
+- `src/results.rs`: documents as rows and columns, as ADR-056 point 3 says. `_id`, then the
+  top-level fields of the first batch in the order first seen (at most 256), then `…`, always
+  there. A column is typed only when every value of the first batch has one BSON type that maps
+  exactly (`int` and `long` to integers, `double`, `bool`, `string`, `date`, `decimal`,
+  `objectId` as its hex digits); otherwise relaxed Extended JSON. What a later document has no
+  column for, or what does not fit its column, goes to `…`. **Nothing is ever dropped.**
+- `src/bin/spelaiondb-plugin-mongodb.rs`: the program. It hands the driver to
   `spelaion_plugin_sdk::run` and nothing else.
-- `tests/`: the engine's own tests (its types against the engine's own text), and
-  `tests/conformance.rs`: SpelaionDB's conformance set against this program, and `plugin.toml`
-  checked against what the program says of itself.
-- `plugin.toml`: the protocol version, the engines and the lowest SpelaionDB of this plugin.
-- In this repository only: `.github/workflows/plugin-ci.yml` and `plugin-release.yml`, the
-  workflows every plugin calls. A change to them reaches every plugin: it needs an owner.
+- `tests/mongodb.rs`: the type zoo (every BSON type as a cell, its logical and native type and
+  its text) and the rest against real servers. **A new type or reply shape is added there
+  first.** `tests/conformance.rs`: SpelaionDB's conformance set through requests, against
+  MongoDB and FerretDB, and `plugin.toml` checked against what the program says of itself.
+- `testing/compose.yaml` and `ci/services.sh`: MongoDB 8.0 and FerretDB 2.
+- `plugin.toml`: the protocol version (1.1), the engine and the lowest SpelaionDB.
+
+## How it connects
+- **Only to the address it is given, directly** (`directConnection`): never to the other
+  members a replica set names, and never through DNS (`mongodb+srv` is not offered; the crate's
+  DNS resolver is not compiled in). SpelaionDB's core opens every route (tunnels, proxies,
+  Kubernetes); a plugin that found servers by itself would go around them.
+- **Settings** (`connect`'s `options`) are only `authSource` (default `admin`) and
+  `authMechanism` (`SCRAM-SHA-1` or `SCRAM-SHA-256`); anything else is refused, after the core
+  has refused it too.
+- **TLS** with rustls: `disable` and `prefer` connect without TLS (MongoDB has no "if the
+  server can"); `require` encrypts without checking the certificate; `verify-ca` and
+  `verify-full` both check the certificate and the server's name (rustls in MongoDB's driver
+  cannot skip the name), and both are refused through a tunnel, where the name would be this
+  machine's. A client certificate and its key must be one PEM file.
+- **Reads and writes are never retried** by the driver (`retryReads`, `retryWrites` off):
+  nothing the user ran is run again.
+- A connection asking to be read-only is refused: MongoDB has no read-only mode in SpelaionDB
+  yet (ADR-056 point 6), and the core never asks for one.
+- **Cancel** drops the running request: its connection closes and the server ends the
+  operation; a cursor is closed with it.
 
 ## A plugin is the wire, not the rules
 SpelaionDB's core splits, classifies and guards statements, keeps secrets, opens tunnels and
-writes the audit (ADR-041 there). A plugin connects, runs what it is sent, cancels, introspects
-and loads rows. So, and these are not negotiable (`docs/plugin-protocol.md` in SpelaionDB's
+writes the audit (ADR-041 there). This plugin connects, runs what it is sent, cancels and
+introspects. So, and these are not negotiable (`docs/plugin-protocol.md` in SpelaionDB's
 repository, "What a plugin must never do"):
 
 - **Standard output is the protocol and nothing else.** Never `println!`. What must be said
   goes to standard error, a line at a time.
 - **The password arrives in `connect` and is written nowhere**: not to a log, an error, a
   file or the environment.
-- **It runs what it is sent.** It never decides whether a statement is a read, and never
-  changes one.
+- **It runs what it is sent.** It never decides whether a request is a read, and never changes
+  one.
 - **Nothing is run again** after a connection is lost.
 - **It ends when its standard input closes** (the SDK does this).
-- It reads no configuration file, keychain or store of SpelaionDB's, and opens no tunnel: it
-  connects to `connect_addr` when it is given one and verifies TLS against `host`.
+- It reads no configuration file, keychain or store of SpelaionDB's, and opens no tunnel.
+- **Nothing it runs on its own reads data**: the explorer's calls list databases, collections
+  and indexes, never counts or samples documents.
 
 ## The contract comes from SpelaionDB, by tag
-`spelaion-driver-api`, `spelaion-dialect`, `spelaion-plugin-sdk` and, for the tests,
-`spelaion-plugin-host` are git dependencies on a tag of SpelaionDB's repository
-(`plugin-sdk-vX.Y.Z`), all on the same tag. They are not on crates.io.
+`spelaion-driver-api`, `spelaion-plugin-sdk` and, for the tests, `spelaion-plugin-host` are
+git dependencies on a tag of SpelaionDB's repository (`plugin-sdk-vX.Y.Z`), all on the same
+tag. They are not on crates.io.
 
 - **A protocol change is made there first** (the new version, with its tests), then here: move
   the tag, adapt, release. SpelaionDB then moves its pin.
@@ -51,11 +84,12 @@ repository, "What a plugin must never do"):
   if they differ.
 
 ## Releases
-Pushing a tag `vX.Y.Z` (the version in `Cargo.toml`) runs the shared release: the four
-platforms, each archive with its SHA-256, and notes that carry the pin in the form SpelaionDB's
-`plugins.toml` wants. **Nothing is signed and no secret lives in a plugin's repository**: a
-release reaches users only when SpelaionDB's repository pins its hashes in a pull request of
-its own, whose CI runs SpelaionDB's tests through that exact build (ADR-042 there).
+Pushing a tag `vX.Y.Z` (the version in `Cargo.toml`) runs the release every plugin shares
+(the template's repository, called by commit): the four platforms, each archive with its
+SHA-256, and notes that carry the pin in the form SpelaionDB's `plugins.toml` wants. **Nothing
+is signed and no secret lives here**: a release reaches users only when SpelaionDB's
+repository pins its hashes in a pull request of its own, whose CI runs SpelaionDB's tests
+through that exact build (ADR-042 there).
 
 ## Branches
 `main` is protected: it changes only through pull requests whose CI is green, and cannot be
@@ -64,10 +98,11 @@ an owner. The work is tracked in SpelaionDB's tracker (Plane, project `SDB`): wr
 identifier in the pull request's description, never in a commit subject.
 
 ## Before calling something done
-- `cargo fmt --all`, `cargo clippy --all-targets -- -D warnings`, `cargo test` (with the
-  engine's server up, where it has one: a test skipped is not a test passed).
+- `cargo fmt --all`, `cargo clippy --all-targets -- -D warnings`.
+- The tests against real servers (without the variables they are skipped, and that does
+  **not** count as tested): `ci/services.sh`, then
+  `SPELAION_TEST_MONGO=127.0.0.1:27018 SPELAION_TEST_FERRETDB=127.0.0.1:27019 cargo test`.
 - `cargo deny check` if dependencies change.
-- A change to how values are written is checked against SpelaionDB too: build the program and
-  run SpelaionDB's tests through it (`SPELAION_DEV_PLUGIN_<ENGINE>=<the program>` with a
+- A change to how values are laid out is checked against SpelaionDB too: build this program and
+  run SpelaionDB's tests through it (`SPELAION_DEV_PLUGIN_MONGODB=<this program>` with a
   development build there).
-- If something could not be tested, say so.
