@@ -1,0 +1,38 @@
+# The servers this plugin's tests run against.
+#
+# MongoDB 8.0, with a user `spelaion` (password `spelaion`) in `admin`, published on
+# 127.0.0.1:27018 (SPELAION_TEST_MONGO).
+#
+# FerretDB 2, which speaks MongoDB's protocol in front of PostgreSQL with DocumentDB's
+# extension, reached through this plugin as a kind of MongoDB connection (SpelaionDB's ADR-056),
+# on 127.0.0.1:27019 (SPELAION_TEST_FERRETDB), same user and password. Its "eval" image carries
+# its own PostgreSQL.
+name: spelaiondb-plugin-mongodb-test
+
+services:
+  mongodb:
+    image: mongo:8.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: spelaion
+      MONGO_INITDB_ROOT_PASSWORD: spelaion
+    ports:
+      - "127.0.0.1:27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  ferretdb:
+    image: ghcr.io/ferretdb/ferretdb-eval:2
+    environment:
+      POSTGRES_USER: spelaion
+      POSTGRES_PASSWORD: spelaion
+    ports:
+      - "127.0.0.1:27019:27017"
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ferretdb", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 90
+      start_period: 5s
