@@ -39,8 +39,9 @@ says only what is different in this repository.
   members a replica set names, and never through DNS (`mongodb+srv` is not offered; the crate's
   DNS resolver is not compiled in). SpelaionDB's core opens every route (tunnels, proxies,
   Kubernetes); a plugin that found servers by itself would go around them.
-- **Settings** (`connect`'s `options`) are only `authSource` (default `admin`) and
-  `authMechanism` (`SCRAM-SHA-1` or `SCRAM-SHA-256`); anything else is refused, after the core
+- **Settings** (`connect`'s `options`) are only `authSource` (default `admin`),
+  `authMechanism` (`SCRAM-SHA-1` or `SCRAM-SHA-256`) and `replicaSet` (the expected set's
+  name, never permission to discover its other members); anything else is refused, after the core
   has refused it too.
 - **TLS** with rustls: `disable` and `prefer` connect without TLS (MongoDB has no "if the
   server can"); `require` encrypts without checking the certificate; `verify-ca` and
