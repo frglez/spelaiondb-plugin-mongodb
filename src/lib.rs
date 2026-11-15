@@ -33,7 +33,7 @@ pub use results::{LEFTOVERS, Layout, MAX_FIELDS};
 
 /// The settings a connection may give (`connect`'s `options`): checked again here, after the
 /// core, so a setting nobody looked at never changes how the plugin connects.
-pub const OPTIONS: &[&str] = &["authSource", "authMechanism"];
+pub const OPTIONS: &[&str] = &["authSource", "authMechanism", "replicaSet"];
 
 /// The commands whose answer is a cursor, read a batch at a time as the core asks.
 const CURSOR_COMMANDS: &[&str] = &["find", "aggregate", "listCollections", "listIndexes"];
@@ -191,6 +191,9 @@ fn client_options(params: &ConnectParams) -> Result<ClientOptions> {
         }])
         // Only the address given: never the other members a server names.
         .direct_connection(true)
+        // DNS TXT options have already been checked by the core. Check the expected set
+        // without discovering or connecting to any other member, including through a tunnel.
+        .repl_set_name(params.options.get("replicaSet").cloned())
         .app_name(params.application_name.clone())
         .credential(credential)
         .tls(tls.map(Tls::Enabled))
@@ -561,5 +564,63 @@ impl CancelHandle for Cancel {
             running.notify_one();
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod connection_options_tests {
+    use super::*;
+
+    #[test]
+    fn expected_replica_set_does_not_enable_discovery_or_retries() {
+        let mut params = ConnectParams {
+            host: "node.example.test".into(),
+            port: 27123,
+            user: "user".into(),
+            tls: TlsMode::VerifyFull,
+            ..Default::default()
+        };
+        params.options.insert("replicaSet".into(), "atlas-1".into());
+        params.options.insert("authSource".into(), "admin".into());
+        let options = client_options(&params).unwrap();
+        assert_eq!(options.repl_set_name.as_deref(), Some("atlas-1"));
+        assert_eq!(options.direct_connection, Some(true));
+        assert_eq!(options.retry_reads, Some(false));
+        assert_eq!(options.retry_writes, Some(false));
+        assert_eq!(
+            options.hosts,
+            vec![ServerAddress::Tcp {
+                host: "node.example.test".into(),
+                port: Some(27123),
+            }]
+        );
+        assert_eq!(options.credential.unwrap().source.as_deref(), Some("admin"));
+        let Some(Tls::Enabled(tls)) = options.tls else {
+            panic!("TLS required")
+        };
+        assert_ne!(tls.allow_invalid_certificates, Some(true));
+    }
+
+    #[test]
+    fn expected_set_keeps_the_cores_route_and_verified_tls_is_never_weakened() {
+        let mut params = ConnectParams {
+            host: "node.example.test".into(),
+            port: 27123,
+            connect_addr: Some("127.0.0.1:12345".parse().unwrap()),
+            ..Default::default()
+        };
+        params.options.insert("replicaSet".into(), "atlas-1".into());
+        let options = client_options(&params).unwrap();
+        assert_eq!(options.repl_set_name.as_deref(), Some("atlas-1"));
+        assert_eq!(
+            options.hosts,
+            vec![ServerAddress::Tcp {
+                host: "127.0.0.1".into(),
+                port: Some(12345),
+            }]
+        );
+        params.tls = TlsMode::VerifyFull;
+        let error = client_options(&params).unwrap_err().to_string();
+        assert!(error.contains("through a tunnel"), "{error}");
     }
 }

@@ -11,8 +11,11 @@ MongoDB yet.
 
 - **Tested against:** MongoDB 8.0 and FerretDB 2 (`testing/compose.yaml`).
 - **Not tested here:** MongoDB Atlas, Amazon DocumentDB and Azure Cosmos DB (paid services with
-  no local image). `mongodb+srv` addresses are not supported: the plugin connects only to the
-  address SpelaionDB gives it.
+  no local image). The plugin connects only to the address SpelaionDB gives it; any DNS SRV
+  discovery is the core's. It accepts `authSource`, `authMechanism` and `replicaSet` settings.
+  `replicaSet` checks the expected set without discovering other members. Verified TLS through
+  a tunnel is still unavailable: MongoDB's Rust driver checks the socket's host name, which
+  is the tunnel's loopback address. The plugin refuses that mode instead of weakening TLS.
 
 Protocol: [SpelaionDB's plugin protocol](https://github.com/spelaion-dev/spelaiondb/blob/dev/docs/plugin-protocol.md),
 version 1.1, experimental until SpelaionDB 1.0. Rules for contributors and agents: `AGENTS.md`.

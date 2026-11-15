@@ -593,7 +593,9 @@ async fn connecting_refuses_what_it_cannot_honour() {
     assert!(!error.contains("not-the-password"), "{error}");
 
     let mut unknown = params(&addr, "spelaion");
-    unknown.options.insert("replicaSet".into(), "rs0".into());
+    unknown
+        .options
+        .insert("srvServiceName".into(), "other".into());
     let error = driver
         .connect(&unknown)
         .await
@@ -601,7 +603,7 @@ async fn connecting_refuses_what_it_cannot_honour() {
         .expect("refused")
         .to_string();
     assert!(
-        error.contains("no connection setting `replicaSet`"),
+        error.contains("no connection setting `srvServiceName`"),
         "{error}"
     );
 
