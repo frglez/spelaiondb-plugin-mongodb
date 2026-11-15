@@ -16,12 +16,11 @@ name = "spelaiondb-plugin-mongodb"
 path = "src/bin/spelaiondb-plugin-mongodb.rs"
 
 # The contract and the plugin's side of the protocol come from SpelaionDB's repository, by tag
-# (ADR-042): one tag pins them together, and until `plugin-sdk-v0.2.0` exists, the commit of
-# `dev` it will name. Requests (protocol 1.1, ADR-056) are what this plugin
-# is sent.
+# (ADR-042): one tag pins them together. `plugin-sdk-v0.2.0` is the first with requests
+# (protocol 1.1, ADR-056), which are what this plugin is sent.
 [dependencies]
-spelaion-driver-api = { git = "https://github.com/spelaion-dev/spelaiondb", rev = "de9dcec" }
-spelaion-plugin-sdk = { git = "https://github.com/spelaion-dev/spelaiondb", rev = "de9dcec" }
+spelaion-driver-api = { git = "https://github.com/spelaion-dev/spelaiondb", tag = "plugin-sdk-v0.2.0" }
+spelaion-plugin-sdk = { git = "https://github.com/spelaion-dev/spelaiondb", tag = "plugin-sdk-v0.2.0" }
 # The same Arrow as SpelaionDB's: batches cross the two unchanged.
 arrow = { version = "60", default-features = false, features = ["ipc"] }
 async-trait = "0.1"
@@ -35,7 +34,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"
 
 [dev-dependencies]
 # The conformance set every plugin runs against its own program (tests/conformance.rs).
-spelaion-plugin-host = { git = "https://github.com/spelaion-dev/spelaiondb", rev = "de9dcec" }
+spelaion-plugin-host = { git = "https://github.com/spelaion-dev/spelaiondb", tag = "plugin-sdk-v0.2.0" }
 
 [lints.rust]
 unsafe_code = "forbid"

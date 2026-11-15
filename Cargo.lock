@@ -506,7 +506,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1346,7 +1346,7 @@ dependencies = [
 [[package]]
 name = "spelaion-driver-api"
 version = "0.9.0"
-source = "git+https://github.com/spelaion-dev/spelaiondb?rev=de9dcec#de9dcecb3bf47ee6d2647818313651b70499afbe"
+source = "git+https://github.com/spelaion-dev/spelaiondb?tag=plugin-sdk-v0.2.0#de9dcecb3bf47ee6d2647818313651b70499afbe"
 dependencies = [
  "arrow",
  "async-trait",
@@ -1360,7 +1360,7 @@ dependencies = [
 [[package]]
 name = "spelaion-plugin-host"
 version = "0.9.0"
-source = "git+https://github.com/spelaion-dev/spelaiondb?rev=de9dcec#de9dcecb3bf47ee6d2647818313651b70499afbe"
+source = "git+https://github.com/spelaion-dev/spelaiondb?tag=plugin-sdk-v0.2.0#de9dcecb3bf47ee6d2647818313651b70499afbe"
 dependencies = [
  "arrow",
  "async-trait",
@@ -1375,7 +1375,7 @@ dependencies = [
 [[package]]
 name = "spelaion-plugin-protocol"
 version = "0.9.0"
-source = "git+https://github.com/spelaion-dev/spelaiondb?rev=de9dcec#de9dcecb3bf47ee6d2647818313651b70499afbe"
+source = "git+https://github.com/spelaion-dev/spelaiondb?tag=plugin-sdk-v0.2.0#de9dcecb3bf47ee6d2647818313651b70499afbe"
 dependencies = [
  "arrow",
  "serde",
@@ -1387,7 +1387,7 @@ dependencies = [
 [[package]]
 name = "spelaion-plugin-sdk"
 version = "0.9.0"
-source = "git+https://github.com/spelaion-dev/spelaiondb?rev=de9dcec#de9dcecb3bf47ee6d2647818313651b70499afbe"
+source = "git+https://github.com/spelaion-dev/spelaiondb?tag=plugin-sdk-v0.2.0#de9dcecb3bf47ee6d2647818313651b70499afbe"
 dependencies = [
  "arrow",
  "futures-util",
